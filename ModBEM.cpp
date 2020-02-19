@@ -4,19 +4,19 @@
 *  crc calculation by Jaime García (https://github.com/peninquen/Modbus-Energy-Monitor-Arduino/)
 */
 //------------------------------------------------------------------------------
-#include "SDM.h"
+#include "ModBEM.h"
 
 //------------------------------------------------------------------------------
 #if defined ( USE_HARDWARESERIAL )
 #if defined ( ESP8266 )
-SDM::SDM(HardwareSerial& serial, long baud, int dere_pin, int config, bool swapuart) : sdmSer(serial) {
+ModBEM::ModBEM(HardwareSerial& serial, long baud, int dere_pin, int config, bool swapuart) : ModBEMSer(serial) {
   this->_baud = baud;
   this->_dere_pin = dere_pin;
   this->_config = config;
   this->_swapuart = swapuart;
 }
 #elif defined ( ESP32 )
-SDM::SDM(HardwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_pin, int8_t tx_pin) : sdmSer(serial) {
+ModBEM::ModBEM(HardwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_pin, int8_t tx_pin) : ModBEMSer(serial) {
   this->_baud = baud;
   this->_dere_pin = dere_pin;
   this->_config = config;
@@ -24,7 +24,7 @@ SDM::SDM(HardwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_
   this->_tx_pin = tx_pin;
 }
 #else
-SDM::SDM(HardwareSerial& serial, long baud, int dere_pin, int config) : sdmSer(serial) {
+ModBEM::ModBEM(HardwareSerial& serial, long baud, int dere_pin, int config) : ModBEMSer(serial) {
   this->_baud = baud;
   this->_dere_pin = dere_pin;
   this->_config = config;
@@ -32,7 +32,7 @@ SDM::SDM(HardwareSerial& serial, long baud, int dere_pin, int config) : sdmSer(s
 #endif
 #else
 #if defined ( ESP8266 ) || defined ( ESP32 )
-SDM::SDM(SoftwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_pin, int8_t tx_pin) : sdmSer(serial) {
+ModBEM::ModBEM(SoftwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_pin, int8_t tx_pin) : ModBEMSer(serial) {
   this->_baud = baud;
   this->_dere_pin = dere_pin;
   this->_config = config;
@@ -40,45 +40,45 @@ SDM::SDM(SoftwareSerial& serial, long baud, int dere_pin, int config, int8_t rx_
   this->_tx_pin = tx_pin;
 }
 #else
-SDM::SDM(SoftwareSerial& serial, long baud, int dere_pin) : sdmSer(serial) {
+ModBEM::ModBEM(SoftwareSerial& serial, long baud, int dere_pin) : ModBEMSer(serial) {
   this->_baud = baud;
   this->_dere_pin = dere_pin;
 }
 #endif
 #endif
 
-SDM::~SDM() {
+ModBEM::~ModBEM() {
 }
 
-void SDM::begin(void) {
+void ModBEM::begin(void) {
 #if defined ( USE_HARDWARESERIAL )
   #if defined ( ESP8266 )
-    sdmSer.begin(_baud, (SerialConfig)_config);
+    ModBEMSer.begin(_baud, (SerialConfig)_config);
   #elif defined ( ESP32 )
-    sdmSer.begin(_baud, _config, _rx_pin, _tx_pin);
+    ModBEMSer.begin(_baud, _config, _rx_pin, _tx_pin);
   #else
-    sdmSer.begin(_baud, _config);
+    ModBEMSer.begin(_baud, _config);
   #endif
 #else
   #if defined ( ESP8266 ) || defined ( ESP32 )
-    sdmSer.begin(_baud, (SoftwareSerialConfig)_config, _rx_pin, _tx_pin);
+    ModBEMSer.begin(_baud, (SoftwareSerialConfig)_config, _rx_pin, _tx_pin);
   #else
-    sdmSer.begin(_baud);
+    ModBEMSer.begin(_baud);
   #endif
 #endif
 
 #if defined ( USE_HARDWARESERIAL ) && defined ( ESP8266 )
   if (_swapuart)
-    sdmSer.swap();
+    ModBEMSer.swap();
 #endif
   if (_dere_pin != NOT_A_PIN) {
     pinMode(_dere_pin, OUTPUT);                                                 //set output pin mode for DE/RE pin when used (for control MAX485)
   }
-  dereSet(LOW);                                                                 //set init state to receive from SDM -> DE Disable, /RE Enable (for control MAX485)
+  dereSet(LOW);                                                                 //set init state to receive from ModBEM -> DE Disable, /RE Enable (for control MAX485)
 }
 
 
-float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
+float ModBEM::readVal(uint8_t node, uint16_t reg, ModBEM::RegisterTyp typ) {
   #ifdef DEBUG_SERIAL
     DEBUG_SERIAL.print("ReadVal node:"); DEBUG_SERIAL.print(node); DEBUG_SERIAL.print(" reg "); DEBUG_SERIAL.println(reg);
   #endif
@@ -97,13 +97,13 @@ float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
     uint16_t temp;
     uint16_t FRAMESIZE_IN;
     unsigned long resptime;
-    uint16_t readErr = SDM_ERR_NO_ERROR;
+    ErrorCodes readErr = ERR_NO_ERROR;
     
     FRAMESIZE_IN = REGISTERCOUNT - registerArrayStart;
     if (FRAMESIZE_IN > 20)
       FRAMESIZE_IN = 20;
     registerArray[0] = node;
-    registerArray[1] = SDM_B_02;
+    registerArray[1] = ModBEM_B_02;
     registerArray[2] = highByte(registerArrayStart);
     registerArray[3] = lowByte(registerArrayStart);
     registerArray[4] = highByte(FRAMESIZE_IN);
@@ -113,29 +113,29 @@ float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
     registerArray[7] = highByte(temp);
 
     #if !defined ( USE_HARDWARESERIAL )
-      sdmSer.listen();                                                              //enable softserial rx interrupt
+      ModBEMSer.listen();                                                              //enable softserial rx interrupt
     #endif
     flush();                                                                      //read serial if any old data is available
-    dereSet(HIGH);                                                                //transmit to SDM  -> DE Enable, /RE Disable (for control MAX485)
+    dereSet(HIGH);                                                                //transmit to ModBEM  -> DE Enable, /RE Disable (for control MAX485)
     delay(2);                                                                     //fix for issue (nan reading) by sjfaustino: https://github.com/reaper7/SDM_Energy_Meter/issues/7#issuecomment-272111524
-    sdmSer.write(registerArray, 8);                                              //send 8 bytes
-    sdmSer.flush();                                                               //clear out tx buffer
-    dereSet(LOW);                                                                 //receive from SDM -> DE Disable, /RE Enable (for control MAX485)
+    ModBEMSer.write(registerArray, 8);                                              //send 8 bytes
+    ModBEMSer.flush();                                                               //clear out tx buffer
+    dereSet(LOW);                                                                 //receive from ModBEM -> DE Disable, /RE Enable (for control MAX485)
 
     resptime = millis() + MAX_MILLIS_TO_WAIT;
-    while (sdmSer.available() < 3 + 2*FRAMESIZE_IN + 2) {
+    while (ModBEMSer.available() < 3 + 2*FRAMESIZE_IN + 2) {
       if (resptime < millis()) {
-        readErr = SDM_ERR_TIMEOUT;
+        readErr = ERR_TIMEOUT;
         #ifdef DEBUG_SERIAL
-          DEBUG_SERIAL.print("Timeout: "); DEBUG_SERIAL.print(sdmSer.available()); DEBUG_SERIAL.print(" von "); DEBUG_SERIAL.print(5+2*FRAMESIZE_IN); DEBUG_SERIAL.println(" Zeichen verfügbar");
+          DEBUG_SERIAL.print("Timeout: "); DEBUG_SERIAL.print(ModBEMSer.available()); DEBUG_SERIAL.print(" von "); DEBUG_SERIAL.print(5+2*FRAMESIZE_IN); DEBUG_SERIAL.println(" Zeichen verfügbar");
         #endif
         break;
       }
       yield();
     }
-    if (readErr == SDM_ERR_NO_ERROR) {                                            //if no timeout...
+    if (readErr == ERR_NO_ERROR) {                                            //if no timeout...
       for(int n=0; n<3 + 2*FRAMESIZE_IN + 2; n++) {
-        registerArray[n] = sdmSer.read();
+        registerArray[n] = ModBEMSer.read();
         #ifdef DEBUG_SERIAL
           DEBUG_SERIAL.print(n);
           DEBUG_SERIAL.print(":");
@@ -147,13 +147,13 @@ float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
         DEBUG_SERIAL.println();
       #endif
        if (registerArray[0] == node) {
-        if (registerArray[1] == SDM_B_02 ) {
+        if (registerArray[1] == ModBEM_B_02 ) {
           if ((calculateCRC(registerArray, 3 + registerArray[2])) == ((registerArray[(2 + registerArray[2] + 2)] << 8) | registerArray[(2 + registerArray[2] + 1)])) {  //calculate crc for recived bytes and compare with received crc (last two)
             //everything OK, nothing to do
           } else {
-            readErr = SDM_ERR_CRC_ERROR;
+            readErr = ERR_CRC_ERROR;
             #ifdef DEBUG_SERIAL
-              DEBUG_SERIAL.print("SDM_ERR_CRC_ERROR");
+              DEBUG_SERIAL.print("ERR_CRC_ERROR");
               DEBUG_SERIAL.print(3+ registerArray[2]);
               DEBUG_SERIAL.print(",");
 //              DEBUG_SERIAL.print(calculateCRC(registerArray, 1 + registerArray[2]));
@@ -171,24 +171,24 @@ float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
             #endif
           }
         } else {
-          readErr = SDM_ERR_WRONG_FUNCTIONCODE;
+          readErr = ERR_WRONG_FUNCTIONCODE;
           #ifdef DEBUG_SERIAL
-            DEBUG_SERIAL.println("SDM_ERR_WRONG_FUNCTIONCODE");
+            DEBUG_SERIAL.println("ERR_WRONG_FUNCTIONCODE");
           #endif
         }
       } else {
-        readErr = SDM_ERR_WRONG_NODE;
+        readErr = ERR_WRONG_NODE;
         #ifdef DEBUG_SERIAL
-          DEBUG_SERIAL.println("SDM_ERR_WRONG_NODE");
+          DEBUG_SERIAL.println("ERR_WRONG_NODE");
         #endif
       }
     }
     flush();                                                                      //read serial if any old data is available
     #if !defined ( USE_HARDWARESERIAL )
-      sdmSer.stopListening();                                                     //disable softserial rx interrupt
+      ModBEMSer.stopListening();                                                     //disable softserial rx interrupt
     #endif
 
-    if (readErr != SDM_ERR_NO_ERROR) {                                            //if error then copy temp error value to global val and increment global error counter
+    if (readErr != ERR_NO_ERROR) {                                            //if error then copy temp error value to global val and increment global error counter
       readingerrcode = readErr;
       readingerrcount++;
       registerArray[0] = 0;                                                        //to start a new read next time
@@ -227,40 +227,40 @@ float SDM::readVal(uint8_t node, uint16_t reg, SDM::RegisterTyp typ) {
   return (res);
 }
 
-uint16_t SDM::getErrCode(bool _clear) {
-  uint16_t _tmp = readingerrcode;
+ModBEM::ErrorCodes ModBEM::getErrCode(bool _clear) {
+  ErrorCodes _tmp = readingerrcode;
   if (_clear == true)
     clearErrCode();
   return (_tmp);
 }
 
-uint16_t SDM::getErrCount(bool _clear) {
+uint16_t ModBEM::getErrCount(bool _clear) {
   uint16_t _tmp = readingerrcount;
   if (_clear == true)
     clearErrCount();
   return (_tmp);
 }
 
-uint16_t SDM::getSuccCount(bool _clear) {
+uint16_t ModBEM::getSuccCount(bool _clear) {
   uint16_t _tmp = readingsuccesscount;
   if (_clear == true)
     clearSuccCount();
   return (_tmp);
 }
 
-void SDM::clearErrCode() {
-  readingerrcode = SDM_ERR_NO_ERROR;
+void ModBEM::clearErrCode() {
+  readingerrcode = ERR_NO_ERROR;
 }
 
-void SDM::clearErrCount() {
+void ModBEM::clearErrCount() {
   readingerrcount = 0;
 }
 
-void SDM::clearSuccCount() {
+void ModBEM::clearSuccCount() {
   readingsuccesscount = 0;
 }
 
-uint16_t SDM::calculateCRC(uint8_t *array, uint8_t num) {
+uint16_t ModBEM::calculateCRC(uint8_t *array, uint8_t num) {
   uint16_t _crc, _flag;
   _crc = 0xFFFF;
   for (uint8_t i = 0; i < num; i++) {
@@ -275,15 +275,15 @@ uint16_t SDM::calculateCRC(uint8_t *array, uint8_t num) {
   return _crc;
 }
 
-void SDM::flush() {
+void ModBEM::flush() {
   uint8_t _i = 0;
-  while (sdmSer.available() && _i++ < 10)  {                                    //read serial if any old data is available
-    sdmSer.read();
+  while (ModBEMSer.available() && _i++ < 10)  {                                    //read serial if any old data is available
+    ModBEMSer.read();
     delay(1);
   }
 }
 
-void SDM::dereSet(bool _state) {
+void ModBEM::dereSet(bool _state) {
   if (_dere_pin != NOT_A_PIN)
-    digitalWrite(_dere_pin, _state);                                            //receive from SDM -> DE Disable, /RE Enable (for control MAX485)
+    digitalWrite(_dere_pin, _state);                                            //receive from ModBEM -> DE Disable, /RE Enable (for control MAX485)
 }
